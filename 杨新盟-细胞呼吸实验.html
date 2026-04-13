@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>探究酵母菌细胞呼吸的方式 虚拟实验</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        * {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        /* 实验容器样式 - 复刻参考图的扁平化风格 */
+        .beaker {
+            position: relative;
+            width: 160px;
+            height: 200px;
+            border: 3px solid #cbd5e1;
+            border-radius: 0 0 40px 40px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.05);
+        }
+        .beaker-neck {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border: 3px solid #cbd5e1;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: rgba(255,255,255,0.05);
+        }
+        .stopper {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 25px;
+            background: #92400e;
+            border-radius: 4px;
+            z-index: 10;
+        }
+        .tube {
+            position: absolute;
+            background: #e2e8f0;
+            border: 2px solid #94a3b8;
+            z-index: 5;
+        }
+        .connect-tube {
+            position: absolute;
+            height: 6px;
+            background: #94a3b8;
+            z-index: 4;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            animation: rise linear infinite;
+            opacity: 0;
+        }
+        @keyframes rise {
+            0% {
+                transform: translateY(0) scale(0.5);
+                opacity: 0.8;
+            }
+            80% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(-160px) scale(1.2);
+                opacity: 0;
+            }
+        }
+        @keyframes pumpRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .pump-blade {
+            animation: pumpRotate 1s linear infinite;
+            animation-play-state: paused;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        /* 试管样式 - 酒精检测模块 */
+        .test-tube {
+            position: relative;
+            width: 30px;
+            height: 80px;
+            border: 2px solid #cbd5e1;
+            border-radius: 0 0 10px 10px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.1);
+        }
+        .test-tube-neck {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 15px;
+            height: 20px;
+            border: 2px solid #cbd5e1;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+        }
+        @keyframes orangeToGreen {
+            0% { background-color: #f97316; }
+            100% { background-color: #10b981; }
+        }
+        .alcohol-change {
+            animation: orangeToGreen 8s linear forwards;
+            animation-play-state: paused;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen p-4">
+    <div class="max-w-7xl mx-auto">
+        <!-- 标题 -->
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">探究酵母菌细胞呼吸的方式</h1>
+            <p class="text-gray-600">人教版高中生物必修1 第五章第三节 虚拟实验</p>
+        </header>
+
+        <!-- 实验装置展示区 -->
+        <section class="bg-white/80 rounded-2xl shadow-lg p-6 mb-6">
+            <div class="flex flex-wrap justify-center gap-12">
+                <!-- 有氧呼吸装置组 -->
+                <div class="flex flex-col items-center">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">有氧呼吸装置</h3>
+                    <div class="flex items-end gap-6 relative">
+                        <!-- NaOH溶液瓶 + 气泵集成 -->
+                        <div class="relative">
+                            <!-- 气泵 -->
+                            <div class="absolute -left-20 top-10 flex flex-col items-center">
+                                <div id="pump" class="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center relative shadow-md">
+                                    <div class="pump-blade w-14 h-14 absolute">
+                                        <div class="w-1 h-6 bg-slate-700 absolute top-0 left-1/2 -translate-x-1/2"></div>
+                                        <div class="w-1 h-6 bg-slate-700 absolute top-1/2 left-0 -translate-y-1/2 rotate-90"></div>
+                                    </div>
+                                    <div class="w-4 h-4 bg-slate-700 rounded-full z-10"></div>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">接橡皮球(或气泵)</p>
+                            </div>
+
+                            <!-- 连接管 - 气泵直连NaOH瓶 -->
+                            <div class="connect-tube w-16 top-10 left-0"></div>
+
+                            <!-- NaOH溶液瓶 -->
+                            <div class="beaker" id="naoh-beaker">
+                                <div class="beaker-neck"></div>
+                                <div class="stopper"></div>
+                                <div id="naoh-liquid" class="absolute bottom-0 w-full h-1/2 bg-blue-500/70 transition-colors duration-1000"></div>
+                                <div class="tube w-2 h-140 absolute left-4 top-0"></div>
+                                <div class="tube w-2 h-100 absolute right-4 top-0"></div>
+                                <p class="absolute bottom-2 w-full text-center text-sm font-medium text-gray-700">质量分数为10%<br>的NaOH溶液</p>
+                            </div>
+                        </div>
+
+                        <!-- 连接管2 - NaOH瓶直连酵母菌瓶 -->
+                        <div class="connect-tube w-16 top-10 left-[100%]"></div>
+
+                        <!-- 酵母菌培养液瓶A -->
+                        <div class="beaker" id="aero-yeast-beaker">
+                            <div class="beaker-neck"></div>
+                            <div class="stopper"></div>
+                            <div id="aero-yeast-liquid" class="absolute bottom-0 w-full h-3/5 bg-amber-400/80 transition-colors duration-1000"></div>
+                            <div class="tube w-2 h-140 absolute left-4 top-0"></div>
+                            <div class="tube w-2 h-100 absolute right-4 top-0"></div>
+                            <p class="absolute bottom-2 w-full text-center text-sm font-medium text-gray-700">酵母菌培养液<br><span class="font-bold text-amber-700">A</span></p>
+                        </div>
+
+                        <!-- 连接管3 -->
+                        <div class="connect-tube w-16 top-10 left-[100%]"></div>
+
+                        <!-- 澄清石灰水瓶 -->
+                        <div class="beaker" id="aero-test-beaker">
+                            <div class="beaker-neck"></div>
+                            <div class="stopper"></div>
+                            <div id="aero-test-liquid" class="absolute bottom-0 w-full h-1/2 bg-blue-100/80 transition-colors duration-2000"></div>
+                            <div class="tube w-2 h-140 absolute left-4 top-0"></div>
+                            <p class="absolute bottom-2 w-full text-center text-sm font-medium text-gray-700">澄清的<br>石灰水</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分隔线 -->
+                <div class="h-64 w-px bg-gray-300 self-center hidden md:block"></div>
+
+                <!-- 无氧呼吸装置组 -->
+                <div class="flex flex-col items-center">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">无氧呼吸装置</h3>
+                    <div class="flex items-end gap-6 relative">
+                        <!-- 酵母菌培养液瓶B -->
+                        <div class="beaker" id="anaero-yeast-beaker">
+                            <div class="beaker-neck"></div>
+                            <div class="stopper"></div>
+                            <div id="anaero-yeast-liquid" class="absolute bottom-0 w-full h-3/5 bg-amber-400/80 transition-colors duration-1000"></div>
+                            <div class="tube w-2 h-100 absolute right-4 top-0"></div>
+                            <p class="absolute bottom-2 w-full text-center text-sm font-medium text-gray-700">酵母菌培养液<br><span class="font-bold text-amber-700">B</span></p>
+                        </div>
+
+                        <!-- 连接管 -->
+                        <div class="connect-tube w-16 top-10 left-[100%]"></div>
+
+                        <!-- 澄清石灰水瓶 -->
+                        <div class="beaker" id="anaero-test-beaker">
+                            <div class="beaker-neck"></div>
+                            <div class="stopper"></div>
+                            <div id="anaero-test-liquid" class="absolute bottom-0 w-full h-1/2 bg-blue-100/80 transition-colors duration-2000"></div>
+                            <div class="tube w-2 h-140 absolute left-4 top-0"></div>
+                            <p class="absolute bottom-2 w-full text-center text-sm font-medium text-gray-700">澄清的<br>石灰水</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 酒精检测实验区 -->
+        <section class="bg-amber-100/80 rounded-2xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-amber-900 mb-4 flex items-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+                酒精检测实验（酸性重铬酸钾法）
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- 有氧呼吸组 -->
+                <div class="bg-white/80 rounded-xl p-6 flex flex-col items-center">
+                    <h3 class="text-lg font-medium text-gray-800 mb-4">有氧呼吸组</h3>
+                    <div class="flex items-center gap-6">
+                        <div class="flex flex-col items-center">
+                            <div class="test-tube">
+                                <div class="test-tube-neck"></div>
+                                <div id="aero-yeast-fluid" class="absolute bottom-0 w-full h-1/3 bg-amber-300/80"></div>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">酵母菌滤液</p>
+                        </div>
+                        <div class="text-2xl text-amber-600">→</div>
+                        <div class="flex flex-col items-center">
+                            <div class="test-tube">
+                                <div class="test-tube-neck"></div>
+                                <div id="aero-k2cr2o7" class="absolute bottom-0 w-full h-2/3 bg-orange-500/90"></div>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">酸性重铬酸钾</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <span class="inline-block px-4 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium" id="aero-alcohol-result">未检测到酒精</span>
+                        <p class="text-sm text-gray-600 mt-1">颜色保持橙色（阴性）</p>
+                    </div>
+                </div>
+
+                <!-- 无氧呼吸组 -->
+                <div class="bg-white/80 rounded-xl p-6 flex flex-col items-center">
+                    <h3 class="text-lg font-medium text-gray-800 mb-4">无氧呼吸组</h3>
+                    <div class="flex items-center gap-6">
+                        <div class="flex flex-col items-center">
+                            <div class="test-tube">
+                                <div class="test-tube-neck"></div>
+                                <div id="anaero-yeast-fluid" class="absolute bottom-0 w-full h-1/3 bg-amber-300/80"></div>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">酵母菌滤液</p>
+                        </div>
+                        <div class="text-2xl text-amber-600">→</div>
+                        <div class="flex flex-col items-center">
+                            <div class="test-tube">
+                                <div class="test-tube-neck"></div>
+                                <div id="anaero-k2cr2o7" class="absolute bottom-0 w-full h-2/3 bg-orange-500/90 alcohol-change"></div>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">酸性重铬酸钾</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <span class="inline-block px-4 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium" id="anaero-alcohol-result">8秒后开始变色：橙→绿</span>
+                        <p class="text-sm text-gray-600 mt-1">出现灰绿色（阳性）</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 交互控制区 -->
+        <section class="bg-white/80 rounded-2xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">交互控制区</h2>
+            <div class="flex flex-wrap justify-center items-center gap-6">
+                <button id="play-btn" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow transition-all">
+                    ▶ 播放动画
+                </button>
+                <button id="pause-btn" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg shadow transition-all">
+                    ⏸ 暂停动画
+                </button>
+                <button id="reset-btn" class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg shadow transition-all">
+                    🔄 重置实验
+                </button>
+                <div class="flex items-center gap-2">
+                    <label for="speed-select" class="text-gray-700 font-medium">动画速度：</label>
+                    <select id="speed-select" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                        <option value="3">3x</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="product-select" class="text-gray-700 font-medium">产物曲线：</label>
+                    <select id="product-select" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="co2" selected>CO₂产生量</option>
+                        <option value="glucose">葡萄糖消耗量</option>
+                        <option value="atp">ATP生成量</option>
+                        <option value="alcohol">酒精生成量</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="reagent-select" class="text-gray-700 font-medium">检测试剂：</label>
+                    <select id="reagent-select" class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="lime" selected>澄清石灰水</option>
+                        <option value="btb">BTB溶液</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- 数据可视化与说明区 -->
+        <section class="bg-white/80 rounded-2xl shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">数据可视化与实验说明</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- 实时数据面板 -->
+                <div class="lg:col-span-1 bg-gray-50 rounded-lg p-4">
+                    <h3 class="text-lg font-medium text-gray-800 mb-3">实时实验数据 (30℃最适温度)</h3>
+                    <div class="space-y-4">
+                        <div class="bg-white p-3 rounded-lg shadow-sm">
+                            <h4 class="font-medium text-blue-700 mb-2">有氧呼吸</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between"><span>反应时间：</span><span id="aero-time">0 s</span></div>
+                                <div class="flex justify-between"><span>葡萄糖消耗：</span><span id="aero-glucose">0.00 g</span></div>
+                                <div class="flex justify-between"><span>CO₂累计：</span><span id="aero-co2">0.00 mL</span></div>
+                                <div class="flex justify-between"><span>ATP生成：</span><span id="aero-atp">0 mmol</span></div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg shadow-sm">
+                            <h4 class="font-medium text-green-700 mb-2">无氧呼吸</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between"><span>反应时间：</span><span id="anaero-time">0 s</span></div>
+                                <div class="flex justify-between"><span>葡萄糖消耗：</span><span id="anaero-glucose">0.00 g</span></div>
+                                <div class="flex justify-between"><span>CO₂累计：</span><span id="anaero-co2">0.00 mL</span></div>
+                                <div class="flex justify-between"><span>ATP生成：</span><span id="anaero-atp">0 mmol</span></div>
+                                <div class="flex justify-between"><span>酒精生成：</span><span id="anaero-alcohol">0.00 g</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据图表区 -->
+                <div class="lg:col-span-2">
+                    <div class="chart-container">
+                        <canvas id="respiration-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实验原理说明 -->
+            <div class="mt-6 bg-blue-50 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-800 mb-2">实验原理说明</h3>
+                <div class="text-gray-700 space-y-2">
+                    <p>1. <strong>有氧呼吸</strong>：酵母菌在有氧条件下，将葡萄糖彻底氧化分解，产生大量CO₂、水和ATP，反应式：C₆H₁₂O₆ + 6O₂ + 6H₂O → 6CO₂ + 12H₂O + 能量</p>
+                    <p>2. <strong>无氧呼吸</strong>：酵母菌在无氧条件下，将葡萄糖不彻底氧化分解，产生少量CO₂、酒精和ATP，反应式：C₆H₁₂O₆ → 2C₂H₅OH(酒精) + 2CO₂ + 少量能量</p>
+                    <p>3. <strong>检测原理</strong>：CO₂可使澄清石灰水变浑浊，也可使BTB溶液由蓝变绿再变黄；<strong>酒精可用酸性重铬酸钾检测，由橙色变灰绿色</strong>。</p>
+                    <p>4. <strong>实验数据</strong>：30℃最适温度下，有氧呼吸CO₂产生速率为29.87mL/min，无氧呼吸为7.47mL/min，有氧呼吸能量转化效率远高于无氧呼吸。</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center mt-6 text-gray-600 text-sm">
+            <p>© 2025 高中生物虚拟实验教学平台 | 人教版必修1 配套资源</p>
+        </footer>
+    </div>
+
+    <script>
+        // ==================== 核心参数配置 ====================
+        const config = {
+            speed: 1,
+            isPlaying: false,
+            reagent: 'lime', // lime: 澄清石灰水, btb: BTB溶液
+            product: 'co2',
+            aeroCO2Rate: 29.87 / 60, // 有氧CO₂产生速率 mL/s
+            anaeroCO2Rate: 7.47 / 60, // 无氧CO₂产生速率 mL/s
+            aeroGlucoseRate: (29.87 / 60) / 22.4 * 0.18, // 有氧葡萄糖消耗速率 g/s (1mol葡萄糖产6mol CO₂)
+            anaeroGlucoseRate: (7.47 / 60) / 22.4 * 0.18, // 无氧葡萄糖消耗速率 g/s (1mol葡萄糖产2mol CO₂)
+            aeroATPRate: (29.87 / 60) / 22.4 * 30, // 有氧ATP生成速率 mmol/s (1mol葡萄糖产30mol ATP)
+            anaeroATPRate: (7.47 / 60) / 22.4 * 2, // 无氧ATP生成速率 mmol/s (1mol葡萄糖产2mol ATP)
+            anaeroAlcoholRate: (7.47 / 60) / 22.4 * 0.46, // 无氧酒精生成速率 g/s
+            time: 0,
+            chartData: {
+                labels: [],
+                aero: [],
+                anaero: []
+            }
+        };
+
+        // ==================== DOM元素获取 ====================
+        const playBtn = document.getElementById('play-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const speedSelect = document.getElementById('speed-select');
+        const productSelect = document.getElementById('product-select');
+        const reagentSelect = document.getElementById('reagent-select');
+        const pump = document.querySelector('.pump-blade');
+
+        // 溶液元素
+        const naohLiquid = document.getElementById('naoh-liquid');
+        const aeroYeastLiquid = document.getElementById('aero-yeast-liquid');
+        const aeroTestLiquid = document.getElementById('aero-test-liquid');
+        const anaeroYeastLiquid = document.getElementById('anaero-yeast-liquid');
+        const anaeroTestLiquid = document.getElementById('anaero-test-liquid');
+
+        // 酒精检测元素
+        const aeroK2cr2o7 = document.getElementById('aero-k2cr2o7');
+        const anaeroK2cr2o7 = document.getElementById('anaero-k2cr2o7');
+        const aeroAlcoholResult = document.getElementById('aero-alcohol-result');
+        const anaeroAlcoholResult = document.getElementById('anaero-alcohol-result');
+
+        // 数据显示元素
+        const dataElements = {
+            aeroTime: document.getElementById('aero-time'),
+            aeroGlucose: document.getElementById('aero-glucose'),
+            aeroCO2: document.getElementById('aero-co2'),
+            aeroATP: document.getElementById('aero-atp'),
+            anaeroTime: document.getElementById('anaero-time'),
+            anaeroGlucose: document.getElementById('anaero-glucose'),
+            anaeroCO2: document.getElementById('anaero-co2'),
+            anaeroATP: document.getElementById('anaero-atp'),
+            anaeroAlcohol: document.getElementById('anaero-alcohol')
+        };
+
+        // ==================== 图表初始化 ====================
+        const ctx = document.getElementById('respiration-chart').getContext('2d');
+        let chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: '有氧呼吸',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: '无氧呼吸',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'CO₂产生量对比 (mL)',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '时间 (s)'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'CO₂累计量 (mL)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // ==================== 气泡生成逻辑 ====================
+        function createBubble(container, speed, count = 1) {
+            for (let i = 0; i < count; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                const size = Math.random() * 8 + 4;
+                bubble.style.width = `${size}px`;
+                bubble.style.height = `${size}px`;
+                bubble.style.left = `${Math.random() * 120 + 20}px`;
+                bubble.style.bottom = '0';
+                bubble.style.animationDuration = `${(2 / speed).toFixed(2)}s`;
+                bubble.style.animationDelay = `${Math.random() * 0.5}s`;
+                container.appendChild(bubble);
+                
+                // 动画结束后移除气泡
+                setTimeout(() => {
+                    bubble.remove();
+                }, (2000 / speed) + 500);
+            }
+        }
+
+        // 气泡生成定时器
+        let aeroBubbleTimer, anaeroBubbleTimer;
+        function startBubbles() {
+            // 有氧呼吸气泡 (速率更快)
+            aeroBubbleTimer = setInterval(() => {
+                if (config.isPlaying) {
+                    createBubble(document.getElementById('naoh-beaker'), config.speed, 2);
+                    createBubble(document.getElementById('aero-yeast-beaker'), config.speed, 3);
+                    createBubble(document.getElementById('aero-test-beaker'), config.speed, 2);
+                }
+            }, 500 / config.speed);
+
+            // 无氧呼吸气泡 (速率较慢)
+            anaeroBubbleTimer = setInterval(() => {
+                if (config.isPlaying) {
+                    createBubble(document.getElementById('anaero-yeast-beaker'), config.speed, 1);
+                    createBubble(document.getElementById('anaero-test-beaker'), config.speed, 1);
+                }
+            }, 1000 / config.speed);
+        }
+
+        function stopBubbles() {
+            clearInterval(aeroBubbleTimer);
+            clearInterval(anaeroBubbleTimer);
+        }
+
+        // ==================== 溶液变色逻辑 ====================
+        function updateLiquidColor() {
+            if (!config.isPlaying) return;
+
+            // BTB溶液变色: 蓝→绿→黄 (有氧5秒开始, 无氧10秒开始)
+            if (config.reagent === 'btb') {
+                // 有氧BTB变色
+                if (config.time > 5) {
+                    const progress = Math.min((config.time - 5) / 15, 1);
+                    const r = Math.floor(0 + progress * 255);
+                    const g = Math.floor(255 - progress * 55);
+                    const b = Math.floor(255 - progress * 155);
+                    aeroTestLiquid.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+                }
+
+                // 无氧BTB变色 (更慢)
+                if (config.time > 10) {
+                    const progress = Math.min((config.time - 10) / 20, 1);
+                    const r = Math.floor(0 + progress * 255);
+                    const g = Math.floor(255 - progress * 55);
+                    const b = Math.floor(255 - progress * 155);
+                    anaeroTestLiquid.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+                }
+            } 
+            // 澄清石灰水变浑浊 (有氧10秒, 无氧20秒)
+            else {
+                if (config.time > 10) {
+                    const progress = Math.min((config.time - 10) / 10, 1);
+                    aeroTestLiquid.style.backgroundColor = `rgba(245, 245, 245, ${0.2 + progress * 0.8})`;
+                }
+                if (config.time > 20) {
+                    const progress = Math.min((config.time - 20) / 15, 1);
+                    anaeroTestLiquid.style.backgroundColor = `rgba(245, 245, 245, ${0.2 + progress * 0.8})`;
+                }
+            }
+
+            // 酒精检测变色 (无氧8秒后开始)
+            if (config.time > 8) {
+                anaeroK2cr2o7.style.animationPlayState = 'running';
+                anaeroAlcoholResult.textContent = '检测到酒精';
+                anaeroAlcoholResult.className = 'inline-block px-4 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium';
+            }
+        }
+
+        // ==================== 数据计算与更新 ====================
+        function updateData() {
+            if (!config.isPlaying) return;
+
+            config.time += 0.1;
+            const time = config.time.toFixed(1);
+
+            // 有氧数据
+            const aeroCO2 = (config.aeroCO2Rate * config.time).toFixed(2);
+            const aeroGlucose = (config.aeroGlucoseRate * config.time).toFixed(2);
+            const aeroATP = (config.aeroATPRate * config.time).toFixed(2);
+
+            // 无氧数据
+            const anaeroCO2 = (config.anaeroCO2Rate * config.time).toFixed(2);
+            const anaeroGlucose = (config.anaeroGlucoseRate * config.time).toFixed(2);
+            const anaeroATP = (config.anaeroATPRate * config.time).toFixed(2);
+            const anaeroAlcohol = (config.anaeroAlcoholRate * config.time).toFixed(2);
+
+            // 更新DOM
+            dataElements.aeroTime.textContent = `${time} s`;
+            dataElements.aeroGlucose.textContent = `${aeroGlucose} g`;
+            dataElements.aeroCO2.textContent = `${aeroCO2} mL`;
+            dataElements.aeroATP.textContent = `${aeroATP} mmol`;
+
+            dataElements.anaeroTime.textContent = `${time} s`;
+            dataElements.anaeroGlucose.textContent = `${anaeroGlucose} g`;
+            dataElements.anaeroCO2.textContent = `${anaeroCO2} mL`;
+            dataElements.anaeroATP.textContent = `${anaeroATP} mmol`;
+            dataElements.anaeroAlcohol.textContent = `${anaeroAlcohol} g`;
+
+            // 更新图表数据 (每1秒更新一次)
+            if (Math.floor(config.time) % 1 === 0 && config.time % 1 < 0.1) {
+                updateChart();
+            }
+
+            // 更新溶液颜色
+            updateLiquidColor();
+        }
+
+        function updateChart() {
+            let aeroValue, anaeroValue, title, yLabel;
+
+            switch(config.product) {
+                case 'co2':
+                    aeroValue = config.aeroCO2Rate * config.time;
+                    anaeroValue = config.anaeroCO2Rate * config.time;
+                    title = 'CO₂产生量对比 (mL)';
+                    yLabel = 'CO₂累计量 (mL)';
+                    break;
+                case 'glucose':
+                    aeroValue = config.aeroGlucoseRate * config.time;
+                    anaeroValue = config.anaeroGlucoseRate * config.time;
+                    title = '葡萄糖消耗量对比 (g)';
+                    yLabel = '葡萄糖累计消耗 (g)';
+                    break;
+                case 'atp':
+                    aeroValue = config.aeroATPRate * config.time;
+                    anaeroValue = config.anaeroATPRate * config.time;
+                    title = 'ATP生成量对比 (mmol)';
+                    yLabel = 'ATP累计生成 (mmol)';
+                    break;
+                case 'alcohol':
+                    aeroValue = 0;
+                    anaeroValue = config.anaeroAlcoholRate * config.time;
+                    title = '酒精生成量对比 (g)';
+                    yLabel = '酒精累计生成 (g)';
+                    break;
+            }
+
+            // 更新图表数据
+            if (chart.data.labels.length === 0 || chart.data.labels[chart.data.labels.length - 1] !== Math.floor(config.time).toString()) {
+                chart.data.labels.push(Math.floor(config.time).toString());
+                chart.data.datasets[0].data.push(aeroValue);
+                chart.data.datasets[1].data.push(anaeroValue);
+                
+                // 限制数据点数量
+                if (chart.data.labels.length > 60) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                    chart.data.datasets[1].data.shift();
+                }
+                
+                chart.options.plugins.title.text = title;
+                chart.options.scales.y.title.text = yLabel;
+                chart.update();
+            }
+        }
+
+        // ==================== 交互事件绑定 ====================
+        // 播放按钮
+        playBtn.addEventListener('click', () => {
+            if (!config.isPlaying) {
+                config.isPlaying = true;
+                pump.style.animationPlayState = 'running';
+                startBubbles();
+                dataTimer = setInterval(updateData, 100 / config.speed);
+            }
+        });
+
+        // 暂停按钮
+        pauseBtn.addEventListener('click', () => {
+            config.isPlaying = false;
+            pump.style.animationPlayState = 'paused';
+            stopBubbles();
+            clearInterval(dataTimer);
+            // 暂停酒精变色动画
+            anaeroK2cr2o7.style.animationPlayState = 'paused';
+        });
+
+        // 重置按钮
+        resetBtn.addEventListener('click', () => {
+            config.isPlaying = false;
+            config.time = 0;
+            pump.style.animationPlayState = 'paused';
+            stopBubbles();
+            clearInterval(dataTimer);
+
+            // 重置溶液
+            naohLiquid.style.backgroundColor = 'rgba(59, 130, 246, 0.7)';
+            aeroYeastLiquid.style.backgroundColor = 'rgba(251, 191, 36, 0.8)';
+            anaeroYeastLiquid.style.backgroundColor = 'rgba(251, 191, 36, 0.8)';
+            
+            if (config.reagent === 'lime') {
+                aeroTestLiquid.style.backgroundColor = 'rgba(219, 234, 254, 0.8)';
+                anaeroTestLiquid.style.backgroundColor = 'rgba(219, 234, 254, 0.8)';
+            } else {
+                aeroTestLiquid.style.backgroundColor = 'rgba(191, 219, 254, 0.8)';
+                anaeroTestLiquid.style.backgroundColor = 'rgba(191, 219, 254, 0.8)';
+            }
+
+            // 重置酒精检测
+            anaeroK2cr2o7.style.backgroundColor = 'rgba(249, 115, 22, 0.9)';
+            anaeroK2cr2o7.style.animationPlayState = 'paused';
+            anaeroK2cr2o7.style.animation = 'none';
+            setTimeout(() => {
+                anaeroK2cr2o7.style.animation = 'orangeToGreen 8s linear forwards';
+                anaeroK2cr2o7.style.animationPlayState = 'paused';
+            }, 10);
+            aeroAlcoholResult.textContent = '未检测到酒精';
+            aeroAlcoholResult.className = 'inline-block px-4 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium';
+            anaeroAlcoholResult.textContent = '8秒后开始变色：橙→绿';
+            anaeroAlcoholResult.className = 'inline-block px-4 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium';
+
+            // 清空气泡
+            document.querySelectorAll('.bubble').forEach(b => b.remove());
+
+            // 重置数据
+            Object.keys(dataElements).forEach(key => {
+                if (key.includes('Time')) {
+                    dataElements[key].textContent = '0 s';
+                } else if (key.includes('Alcohol')) {
+                    dataElements[key].textContent = '0.00 g';
+                } else if (key.includes('CO2')) {
+                    dataElements[key].textContent = '0.00 mL';
+                } else {
+                    dataElements[key].textContent = '0.00 g';
+                }
+            });
+
+            // 重置图表
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.data.datasets[1].data = [];
+            chart.update();
+        });
+
+        // 速度调节
+        speedSelect.addEventListener('change', (e) => {
+            config.speed = parseFloat(e.target.value);
+            if (config.isPlaying) {
+                stopBubbles();
+                startBubbles();
+                clearInterval(dataTimer);
+                dataTimer = setInterval(updateData, 100 / config.speed);
+                pump.style.animationDuration = `${1 / config.speed}s`;
+                // 同步酒精动画速度
+                anaeroK2cr2o7.style.animationDuration = `${8 / config.speed}s`;
+            }
+        });
+
+        // 产物选择
+        productSelect.addEventListener('change', (e) => {
+            config.product = e.target.value;
+            updateChart();
+        });
+
+        // 试剂选择
+        reagentSelect.addEventListener('change', (e) => {
+            config.reagent = e.target.value;
+            if (config.reagent === 'lime') {
+                aeroTestLiquid.style.backgroundColor = 'rgba(219, 234, 254, 0.8)';
+                anaeroTestLiquid.style.backgroundColor = 'rgba(219, 234, 254, 0.8)';
+            } else {
+                aeroTestLiquid.style.backgroundColor = 'rgba(191, 219, 254, 0.8)';
+                anaeroTestLiquid.style.backgroundColor = 'rgba(191, 219, 254, 0.8)';
+            }
+            // 重置变色状态
+            config.time = 0;
+            updateLiquidColor();
+        });
+
+        // ==================== 初始化 ====================
+        let dataTimer;
+        startBubbles();
+        // 初始暂停状态
+        stopBubbles();
+    </script>
+</body>
+</html>
